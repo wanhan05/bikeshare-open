@@ -8,7 +8,7 @@ import pandas as pd
 import pytest
 
 from src.config import FORBIDDEN, TARGET
-from src.features import build_features, feature_columns
+from src.features import build_features, encode_weather, feature_columns
 from src.ingest import load_raw
 
 
@@ -64,3 +64,26 @@ def test_no_missing_values(feats):
 def test_dates_are_sorted_and_unique(feats):
     assert feats.dteday.is_monotonic_increasing
     assert feats.dteday.is_unique
+
+
+def test_cnt_lag_2_is_a_true_two_day_calendar_lag(feats):
+    """cnt_lag_2 on 2012-03-15 must equal cnt on 2012-03-13, read straight
+    from the raw file, and must hold on every row whose d-2 exists."""
+    raw = load_raw().set_index("dteday")[TARGET]
+    row = feats.set_index("dteday").loc[pd.Timestamp("2012-03-15")]
+    assert row.cnt_lag_2 == raw[pd.Timestamp("2012-03-13")]
+    checked = 0
+    for date, lag in feats.set_index("dteday").cnt_lag_2.items():
+        prev = date - pd.Timedelta(days=2)
+        if prev in raw.index:
+            assert lag == pytest.approx(raw[prev]), f"bad 2-day lag at {date.date()}"
+            checked += 1
+    assert checked > 600, "too few rows actually verified"
+
+
+def test_encode_weather_rejects_unknown_labels():
+    """Without the raise, an unseen label becomes NaN and a later dropna
+    deletes the row silently. The current data has no unseen labels, so
+    only a direct test can see this fault."""
+    with pytest.raises(ValueError, match="unmapped weather labels"):
+        encode_weather(pd.Series(["GOOD", "SNOW"]))
