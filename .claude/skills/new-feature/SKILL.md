@@ -1,7 +1,7 @@
 ---
 name: new-feature
 description: Add a feature column to the modelling table with its leakage test. Use whenever someone asks to add, engineer, or try a new predictor.
-allowed-tools: Read, Edit, Bash(python -m pytest*), Bash(make*)
+allowed-tools: Read, Edit, Bash(python -m pytest*), Bash(make*), Bash(python -c*)
 ---
 
 # Current feature set
