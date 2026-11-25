@@ -62,7 +62,21 @@ def temporal_split(df: pd.DataFrame):
     return train, valid, test
 
 
-def fit_and_score() -> dict:
+# Exercise 4. Optional target transformations, behind a flag. Each pair is
+# (forward, inverse); the inverse uses only columns known at prediction time.
+# The committed reports/metrics.json is always the untransformed pipeline.
+TARGET_TRANSFORMS = {
+    # Ratio to the trailing 7-day mean: the model predicts relative change
+    # around the recent level, so a tree no longer has to extrapolate the
+    # 2011 -> 2012 growth in absolute counts.
+    "ratio_roll7": (
+        lambda d: d[TARGET] / d["cnt_roll_7"],
+        lambda d, p: d["cnt_roll_7"].to_numpy() * p,
+    ),
+}
+
+
+def fit_and_score(transform: str | None = None) -> dict:
     df = pd.read_parquet(PROCESSED)
     cols = feature_columns(df)
     train, valid, test = temporal_split(df)
@@ -74,20 +88,37 @@ def fit_and_score() -> dict:
         "n_valid": len(valid),
         "n_test": len(test),
     }
+    fwd, inv = TARGET_TRANSFORMS.get(transform, (lambda d: d[TARGET], lambda d, p: p))
+    if transform:
+        results["target_transform"] = transform
     for name, model in MODELS.items():
-        model.fit(train[cols], train[TARGET])
-        results[name] = {
-            split: {
-                "r2": round(float(r2_score(part[TARGET], model.predict(part[cols]))), 4),
-                "mae": round(float(mean_absolute_error(part[TARGET], model.predict(part[cols]))), 1),
+        if transform and name.startswith("baseline"):
+            # Baselines predict counts directly; transforming them is meaningless.
+            model.fit(train[cols], train[TARGET])
+            predict = lambda part, m=model: m.predict(part[cols])
+        else:
+            model.fit(train[cols], fwd(train))
+            predict = lambda part, m=model: inv(part, m.predict(part[cols]))
+        results[name] = {}
+        for split, part in [("valid", valid), ("test", test)]:
+            pred = predict(part)
+            results[name][split] = {
+                "r2": round(float(r2_score(part[TARGET], pred)), 4),
+                "mae": round(float(mean_absolute_error(part[TARGET], pred)), 1),
             }
-            for split, part in [("valid", valid), ("test", test)]
-        }
     return results
 
 
 if __name__ == "__main__":
-    res = fit_and_score()
-    METRICS.parent.mkdir(parents=True, exist_ok=True)
-    METRICS.write_text(json.dumps(res, indent=2))
+    import argparse
+
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--target-transform", choices=sorted(TARGET_TRANSFORMS))
+    args = ap.parse_args()
+    res = fit_and_score(args.target_transform)
+    out = METRICS
+    if args.target_transform:  # never overwrite the committed, untransformed metrics
+        out = METRICS.with_name(f"metrics_{args.target_transform}.json")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(res, indent=2))
     print(json.dumps({k: v for k, v in res.items() if k != "features"}, indent=2))
