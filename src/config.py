@@ -42,6 +42,19 @@ TIME_INDEX_COLS = {"instant", "yr", "days_since_2011"}
 #    build our own lags from the target and test those instead.
 UNVERIFIED_COLS = {"cnt_2d_bfr"}
 
+# 4. Source columns: raw labels that are not features themselves but are
+#    encoded into features (weather -> weather_severity, holiday ->
+#    is_holiday, workday -> is_workday) or superseded by our own encoding
+#    of dteday (season, mnth, weekday -> dayofweek, month_sin/cos).
+#    Listing them here means every raw column has a declared role, and
+#    tests/test_contract.py flags any column that does not.
+SOURCE_COLS = {"season", "mnth", "weekday", "holiday", "workday", "weather"}
+
+# 5. Raw columns used directly as features. An allowlist on purpose: a new
+#    numeric column in the data would otherwise pass feature_columns()'s
+#    denylist and reach the model unnoticed.
+RAW_FEATURE_COLS = {"temp", "atemp", "hum", "windspeed"}
+
 # What feature_columns() and the tests actually enforce.
 FORBIDDEN = LEAKAGE_COLS | TIME_INDEX_COLS | UNVERIFIED_COLS
 
