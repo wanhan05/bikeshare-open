@@ -1,9 +1,13 @@
 """Guard rails on the ingest contract and the trained model's behaviour."""
+import hashlib
+
 import pandas as pd
 import pytest
 from sklearn.metrics import r2_score
 
-from src.config import FORBIDDEN, LAG_WARMUP, RAW_FEATURE_COLS, SOURCE_COLS, TARGET
+from src.config import (
+    FORBIDDEN, LAG_WARMUP, RAW, RAW_FEATURE_COLS, RAW_SHA256, SOURCE_COLS, TARGET,
+)
 from src.features import build_features, feature_columns, reindex_to_calendar
 from src.ingest import load_raw
 from src.train import MODELS, temporal_split
@@ -69,3 +73,10 @@ def test_every_raw_column_is_classified(raw, feats):
     assert not unclassified, f"unclassified raw columns: {sorted(unclassified)}"
     # Keep the declaration honest: every declared raw feature is used.
     assert RAW_FEATURE_COLS <= set(feature_columns(feats))
+
+
+def test_raw_file_is_unmodified():
+    """Permission rules stop the agent's Edit tool, not a `cp` in Bash.
+    The file's hash is the check that holds whatever wrote to it."""
+    digest = hashlib.sha256(RAW.read_bytes()).hexdigest()
+    assert digest == RAW_SHA256, f"data/raw/bike_daily.csv changed: sha256 {digest[:16]}..."
