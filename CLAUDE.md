@@ -24,6 +24,16 @@ rides) from calendar, weather, and lagged-demand features.
   count) alongside every model. A negative R^2 is a finding, not a bug
   to hide.
 
+- A new raw column must be classified in `src/config.py` (`FORBIDDEN`,
+  `SOURCE_COLS` or `RAW_FEATURE_COLS`) before it is used. Never write to
+  `data/raw/`, by any tool; `test_raw_file_is_unmodified` checks its hash.
+- `reports/metrics.json` comes only from `make all`. Never commit metrics
+  from `--target-transform` over it.
+
+## Skills
+- `/new-feature <name>`: add a feature, test first.
+- `/seed-fault <description>`: break one thing, record the red output, restore.
+
 ## Style
 - Standard library, pandas, scikit-learn only. No new dependencies
   without asking. Versions are pinned in `requirements.txt`.
